@@ -1,0 +1,38 @@
+{
+  "name": "job-email-tracker",
+  "version": "1.0.0",
+  "description": "Automated job application tracking via Outlook emails → Airtable",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Pranav-here/job-email-tracker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Pranav-here/job-email-tracker/issues"
+  },
+  "homepage": "https://github.com/Pranav-here/job-email-tracker#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@azure/msal-node": "^5.0.2",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "airtable": "^0.12.2",
+    "date-fns": "^4.1.0",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "@vercel/node": "^5.5.23",
+    "dotenv": "^17.2.3",
+    "eslint": "^9.39.2",
+    "prettier": "^3.8.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

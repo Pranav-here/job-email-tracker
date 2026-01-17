@@ -1,0 +1,13 @@
+# Secrets
+.env
+.env.local
+
+# Dependencies
+node_modules/
+
+# Build
+dist/
+.vercel
+
+# Logs
+*.log
