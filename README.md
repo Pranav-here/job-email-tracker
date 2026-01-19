@@ -1,7 +1,6 @@
 # Job Application Email Tracker
 
-> **Automated job application tracking powered by AI**  
-> Automatically syncs your job applications from Gmail to Airtable using Claude AI for intelligent parsing.
+Automated job application tracking system that monitors Gmail for job-related emails, extracts application details using Claude AI, and maintains a structured database in Airtable.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
@@ -11,34 +10,28 @@
 
 ## Overview
 
-Job Application Email Tracker is an intelligent automation system that monitors your Gmail inbox for job-related emails, extracts application details using AI, and maintains a structured database in Airtable. Never lose track of where you applied again.
+This system intelligently monitors your Gmail inbox for job-related emails and automatically syncs application data to Airtable. It uses Claude AI to extract structured information from emails, including company names, job titles, application status, location, salary ranges, and more.
 
 ### Key Features
 
-- 🤖 **AI-Powered Parsing** - Claude 3 analyzes emails to extract company, role, status, location, salary, and more
-- 🎯 **Smart Detection** - Advanced filtering identifies job emails while filtering out spam and newsletters
-- 🔄 **Auto Status Updates** - Automatically tracks application progression (Applied → Interviewing → Offer → Rejected)
-- 🚫 **Duplicate Prevention** - Hash-based deduplication ensures each application is tracked once
-- 📊 **Airtable Integration** - Centralized dashboard with custom views, filters, and organization
-- ⚡ **Serverless Deployment** - Runs on Vercel with scheduled cron jobs
-- 📈 **Full Observability** - Detailed metrics, success rates, and error tracking
+- **AI-Powered Parsing** - Claude 3 Haiku analyzes emails to extract structured application data
+- **Smart Detection** - Advanced multi-layer filtering identifies job emails while filtering out spam and newsletters
+- **Automatic Status Updates** - Tracks application progression (Applied → Interviewing → Offer → Rejected)
+- **Duplicate Prevention** - Hash-based deduplication ensures each application is tracked only once
+- **Airtable Integration** - Centralized database with custom views, filters, and organization
+- **Serverless Deployment** - Runs on Vercel with scheduled cron jobs
+- **Full Observability** - Detailed metrics, success rates, and error tracking
 
 ---
 
 ## How It Works
 
 ```
-┌─────────────┐      ┌──────────────┐      ┌─────────────┐      ┌──────────────┐
-│   Gmail     │─────▶│  Smart       │─────▶│  Claude AI  │─────▶│   Airtable   │
-│   Inbox     │      │  Filtering   │      │  Parsing    │      │   Database   │
-└─────────────┘      └──────────────┘      └─────────────┘      └──────────────┘
-     ↓                      ↓                      ↓                     ↓
-  New job            Boolean queries        Extract fields         Structured
-  emails             & domain filters       & validate output      records
+Gmail Inbox → Smart Filtering → Claude AI Parsing → Airtable Database
 ```
 
 1. **Gmail API** fetches recent emails using advanced search operators
-2. **Multi-layer filtering** identifies job-related emails (40+ keywords, domain matching, regex patterns)
+2. **Multi-layer filtering** identifies job-related emails using 40+ keywords, domain matching, and regex patterns
 3. **Claude AI** extracts structured data from email content with validation
 4. **Deduplication** prevents processing the same email twice
 5. **Airtable** stores applications with smart update logic (only updates when status progresses)
@@ -47,7 +40,7 @@ Job Application Email Tracker is an intelligent automation system that monitors 
 
 ## Tech Stack
 
-- **Runtime**: Node.js 18+ with TypeScript
+- **Runtime**: Node.js 18+ with TypeScript 5.3
 - **AI**: Anthropic Claude 3 Haiku
 - **Email**: Gmail API with OAuth 2.0
 - **Database**: Airtable
@@ -64,207 +57,22 @@ Job Application Email Tracker is an intelligent automation system that monitors 
 - Gmail account
 - [Anthropic API key](https://console.anthropic.com/)
 - [Airtable account](https://airtable.com/)
-- [Google Cloud project](https://console.cloud.google.com/) (for Gmail API)
+- [Google Cloud project](https://console.cloud.google.com/) with Gmail API enabled
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/job-email-tracker.git
+git clone https://github.com/Pranav-here/job-email-tracker.git
 cd job-email-tracker
 
 # Install dependencies
 npm install
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your API keys
 ```
 
 ### Configuration
 
-#### 1. Google Cloud (Gmail API)
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project
-3. Enable the **Gmail API**
-4. Configure OAuth consent screen (External, add yourself as test user)
-5. Create OAuth 2.0 credentials (Web Application)
-   - Add redirect URI: `http://localhost:3000/oauth2callback`
-6. Copy Client ID and Client Secret to `.env`
-
-#### 2. Anthropic API
-
-1. Sign up at [Anthropic Console](https://console.anthropic.com/)
-2. Generate an API key
-3. Add to `.env` as `ANTHROPIC_API_KEY`
-
-#### 3. Airtable Setup
-
-1. Create a new base in Airtable
-2. Create a table named **"Applications"** with these fields:
-
-| Column Name   | Type              | Description                          |
-|---------------|-------------------|--------------------------------------|
-| Email ID      | Single line text  | Unique email identifier              |
-| Date Applied  | Date              | Application submission date          |
-| Company       | Single line text  | Company name                         |
-| Role          | Single line text  | Job position                         |
-| Status        | Single select     | Applied, Interviewing, Offer, Rejected, Ghosted |
-| Email Subject | Long text         | Original email subject               |
-| Email Date    | Date              | Email received date                  |
-| Location      | Single line text  | Job location                         |
-| Salary Range  | Single line text  | Salary information                   |
-| Job URL       | URL               | Link to job posting                  |
-| Notes         | Long text         | Additional details                   |
-| Last Updated  | Date              | Record modification timestamp        |
-
-3. Generate a Personal Access Token:
-   - Go to https://airtable.com/create/tokens
-   - Create token with scopes: `data.records:read`, `data.records:write`
-   - Add access to your Applications base
-   - Copy token to `.env` as `AIRTABLE_API_KEY`
-
-4. Get your Base ID (found in base URL: `app...`)
-
-#### 4. Gmail Authentication
-
-```bash
-# Run the setup wizard
-npm run setup:gmail
-```
-
-Follow the prompts to authenticate with Google. This generates a refresh token for automated access.
-
----
-
-## Usage
-
-### Manual Run
-
-Test the tracker locally:
-
-```bash
-npm run start:manual
-```
-
-This will:
-- Fetch job-related emails from the last 24 hours
-- Parse each email with AI
-- Sync applications to Airtable
-- Display detailed progress and summary
-
-### Validate Configuration
-
-```bash
-npm run validate
-```
-
-Checks that all required environment variables are set.
-
-### Test Connections
-
-```bash
-npm run test:connection
-```
-
-Verifies Gmail, Anthropic, and Airtable connectivity.
-
----
-
-## Deployment (Vercel)
-
-Deploy to Vercel for automated daily syncing:
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Login to Vercel
-vercel login
-
-# Deploy
-vercel
-
-# Set environment variables in Vercel dashboard
-# Project Settings → Environment Variables
-# Add all variables from .env (especially GMAIL_REFRESH_TOKEN)
-```
-
-The cron job runs daily at midnight (configurable in `vercel.json`).
-
----
-
-## Advanced Features
-
-### Smart Email Classification
-
-- **40+ job keywords** (application, interview, offer, recruiter, etc.)
-- **Domain filtering** (greenhouse.io, lever.co, workday.com, careers@, jobs@, etc.)
-- **Regex pattern matching** for high-confidence detection
-- **Spam filtering** (newsletter, marketing, promo, etc.)
-
-### Intelligent Status Progression
-
-The system only updates Airtable when status advances:
-
-```
-Applied (1) → Interviewing (2) → Offer (3) → Rejected (4) → Ghosted (5)
-```
-
-Example: If you manually mark a job as "Rejected", a new "Applied" email won't overwrite it.
-
-### Duplicate Prevention
-
-Uses SHA-256 hashing of `emailId + subject + sender` to prevent reprocessing emails. Also checks Airtable for existing records by:
-- Email ID (exact match)
-- Company + Role combination (fuzzy match)
-
-### Multipart MIME Handling
-
-Recursively extracts text from complex email structures, preferring `text/plain` over `text/html`.
-
----
-
-## Project Structure
-
-```
-job-email-tracker/
-├── backend/
-│   ├── src/
-│   │   ├── api/
-│   │   │   └── cron.ts              # Vercel serverless endpoint
-│   │   ├── services/
-│   │   │   ├── gmail.service.ts     # Gmail API integration
-│   │   │   ├── ai.service.ts        # Claude AI parsing
-│   │   │   └── airtable.service.ts  # Airtable sync logic
-│   │   ├── utils/
-│   │   │   ├── logger.ts            # Structured logging
-│   │   │   ├── retry.ts             # Retry with exponential backoff
-│   │   │   ├── email-classifier.ts  # Email filtering logic
-│   │   │   ├── deduplication.ts     # Hash-based dedup cache
-│   │   │   ├── metrics.ts           # Performance tracking
-│   │   │   └── parser-helpers.ts    # Data extraction utilities
-│   │   └── config/
-│   │       └── index.ts             # Configuration management
-│   └── tests/
-│       └── services/                # Unit tests
-├── common/
-│   └── types/                       # Shared TypeScript interfaces
-├── scripts/
-│   ├── setup-gmail.ts               # OAuth setup wizard
-│   ├── manual-trigger.ts            # Local test runner
-│   ├── test-connection.ts           # Connection validator
-│   └── validate-env.ts              # Environment checker
-├── .env                             # Environment variables (gitignored)
-├── package.json
-├── tsconfig.json
-└── vercel.json                      # Vercel deployment config
-```
-
----
-
-## Environment Variables
+Create a `.env` file in the root directory with the following variables:
 
 ```bash
 # Gmail OAuth
@@ -286,11 +94,197 @@ CRON_SECRET=random_secret_for_security
 LOG_LEVEL=info
 ```
 
+#### 1. Google Cloud Setup (Gmail API)
+
+1. Navigate to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the **Gmail API** for your project
+4. Configure OAuth consent screen:
+   - Choose "External" user type
+   - Add yourself as a test user
+5. Create OAuth 2.0 credentials (Web Application type)
+6. Add authorized redirect URI: `http://localhost:3000/oauth2callback`
+7. Copy the Client ID and Client Secret to your `.env` file
+
+#### 2. Anthropic API Setup
+
+1. Sign up at [Anthropic Console](https://console.anthropic.com/)
+2. Generate an API key
+3. Add the key to `.env` as `ANTHROPIC_API_KEY`
+
+#### 3. Airtable Setup
+
+Create a new base in Airtable with a table named **"Applications"** containing these fields:
+
+| Column Name   | Type              | Description                          |
+|---------------|-------------------|--------------------------------------|
+| Email ID      | Single line text  | Unique email identifier              |
+| Date Applied  | Date              | Application submission date          |
+| Company       | Single line text  | Company name                         |
+| Role          | Single line text  | Job position                         |
+| Status        | Single select     | Applied, Interviewing, Offer, Rejected, Ghosted |
+| Email Subject | Long text         | Original email subject               |
+| Email Date    | Date              | Email received date                  |
+| Location      | Single line text  | Job location                         |
+| Salary Range  | Single line text  | Salary information                   |
+| Job URL       | URL               | Link to job posting                  |
+| Notes         | Long text         | Additional details                   |
+| Last Updated  | Date              | Record modification timestamp        |
+
+Generate a Personal Access Token:
+1. Navigate to https://airtable.com/create/tokens
+2. Create a token with scopes: `data.records:read` and `data.records:write`
+3. Grant access to your Applications base
+4. Copy the token to `.env` as `AIRTABLE_API_KEY`
+5. Copy your Base ID (found in the base URL, starts with `app...`) to `.env` as `AIRTABLE_BASE_ID`
+
+#### 4. Gmail Authentication
+
+Run the Gmail setup wizard to authenticate:
+
+```bash
+npm run setup:gmail
+```
+
+Follow the prompts to authenticate with Google. This generates a refresh token that will be saved to your `.env` file for automated access.
+
+---
+
+## Usage
+
+### Manual Execution
+
+Test the tracker locally:
+
+```bash
+npm run start:manual
+```
+
+This command will:
+- Fetch job-related emails from the last 24 hours
+- Parse each email with Claude AI
+- Sync applications to Airtable
+- Display detailed progress and summary metrics
+
+### Validate Configuration
+
+Verify that all required environment variables are properly set:
+
+```bash
+npm run validate
+```
+
+### Test API Connections
+
+Verify connectivity to Gmail, Anthropic, and Airtable:
+
+```bash
+npm run test:connection
+```
+
+---
+
+## Deployment
+
+### Vercel Deployment
+
+Deploy to Vercel for automated daily syncing:
+
+```bash
+# Install Vercel CLI
+npm install -g vercel
+
+# Login to Vercel
+vercel login
+
+# Deploy the project
+vercel
+
+# Configure environment variables in Vercel Dashboard
+# Navigate to: Project Settings → Environment Variables
+# Add all variables from your .env file (especially GMAIL_REFRESH_TOKEN)
+```
+
+The cron job is configured to run daily at midnight UTC. You can modify the schedule in `vercel.json`.
+
+---
+
+## Project Structure
+
+```
+job-email-tracker/
+├── api/
+│   └── cron.ts                      # Vercel serverless endpoint
+├── backend/
+│   ├── src/
+│   │   ├── api/                     # API handlers
+│   │   ├── services/
+│   │   │   ├── gmail.service.ts     # Gmail API integration
+│   │   │   ├── ai.service.ts        # Claude AI parsing
+│   │   │   └── airtable.service.ts  # Airtable sync logic
+│   │   ├── utils/
+│   │   │   ├── logger.ts            # Structured logging
+│   │   │   ├── retry.ts             # Retry with exponential backoff
+│   │   │   ├── email-classifier.ts  # Email filtering logic
+│   │   │   ├── deduplication.ts     # Hash-based deduplication
+│   │   │   ├── metrics.ts           # Performance tracking
+│   │   │   └── parser-helpers.ts    # Data extraction utilities
+│   │   └── config/
+│   │       └── index.ts             # Configuration management
+│   └── tests/
+│       └── services/                # Unit tests
+├── common/
+│   └── types/                       # Shared TypeScript interfaces
+├── scripts/
+│   ├── setup-gmail.ts               # OAuth setup wizard
+│   ├── manual-trigger.ts            # Local test runner
+│   ├── test-connection.ts           # Connection validator
+│   └── validate-env.ts              # Environment checker
+├── .env                             # Environment variables (gitignored)
+├── .gitignore
+├── package.json
+├── tsconfig.json
+└── vercel.json                      # Vercel deployment configuration
+```
+
+---
+
+## Advanced Features
+
+### Smart Email Classification
+
+The system uses multiple layers of filtering to identify job-related emails:
+
+- **Keyword Matching**: 40+ job-related keywords (application, interview, offer, recruiter, etc.)
+- **Domain Filtering**: Recognizes common job platforms (greenhouse.io, lever.co, workday.com, etc.)
+- **Email Pattern Detection**: Identifies career-related email addresses (careers@, jobs@, recruiting@, etc.)
+- **Spam Filtering**: Excludes newsletters, marketing emails, and promotional content
+
+### Intelligent Status Progression
+
+The system implements a status hierarchy that only allows forward progression:
+
+```
+Applied (1) → Interviewing (2) → Offer (3) → Rejected (4) → Ghosted (5)
+```
+
+Example: If you manually mark an application as "Rejected", subsequent "Applied" status emails will not overwrite this status.
+
+### Duplicate Prevention
+
+Prevents processing the same email multiple times using:
+- **SHA-256 hashing** of `emailId + subject + sender`
+- **Airtable record matching** by Email ID (exact match) and Company + Role combination (fuzzy match)
+
+### Multipart MIME Handling
+
+Recursively extracts text content from complex email structures, with preference for `text/plain` over `text/html` content.
+
 ---
 
 ## Monitoring & Metrics
 
-Every run provides detailed metrics:
+Each execution provides detailed metrics:
 
 ```
 📊 Summary:
@@ -307,18 +301,18 @@ Every run provides detailed metrics:
 Logs include:
 - Timestamp for every operation
 - Error context with retry attempts
-- Status transitions (Applied → Interviewing)
+- Status progression tracking
 - Processing time breakdowns
 
 ---
 
 ## Performance
 
-- **3-5x faster** than naive email fetching (smart Gmail queries)
-- **60-70% reduction** in AI API costs (deduplication + filtering)
+- **3-5x faster** email fetching compared to naive approaches (optimized Gmail queries)
+- **60-70% reduction** in AI API costs through deduplication and intelligent filtering
 - **90%+ accuracy** in job email detection
 - **100% duplicate prevention**
-- **Average processing**: ~2 seconds per email
+- **~2 seconds** average processing time per email
 
 ---
 
@@ -326,54 +320,43 @@ Logs include:
 
 ### Gmail 401 Unauthorized
 
+Your refresh token may have expired. Re-run the Gmail setup:
+
 ```bash
-# Re-run Gmail setup to refresh token
 npm run setup:gmail
 ```
 
 ### Anthropic 404 Model Not Found
 
-Check your API key tier. Some accounts only have access to Claude 3 Haiku. The app automatically uses the available model.
+Verify your API key tier. Some accounts may only have access to Claude 3 Haiku. The application automatically uses the available model based on your account.
 
 ### Airtable 403 Forbidden
 
-Generate a new token with `data.records:read` and `data.records:write` scopes at https://airtable.com/create/tokens
+Ensure your Personal Access Token has the correct scopes (`data.records:read` and `data.records:write`). Generate a new token at https://airtable.com/create/tokens
 
 ### No Emails Found
 
-- Check Gmail search operators in `gmail.service.ts`
-- Verify you have job-related emails in the last 24 hours
-- Try running with extended timeframe: `?hours=168` (7 days)
-
----
-
-## Roadmap
-
-- [ ] Browser extension for one-click application tracking
-- [ ] Email attachment parsing (extract resume, cover letter)
-- [ ] Notion integration as alternative to Airtable
-- [ ] Slack/Discord notifications for status changes
-- [ ] Interview scheduling detection and calendar sync
-- [ ] Company research auto-fill (funding, size, tech stack)
-- [ ] Application analytics dashboard
+- Verify Gmail search operators in `backend/src/services/gmail.service.ts`
+- Confirm you have job-related emails in the specified timeframe
+- Try extending the search timeframe (default is 24 hours)
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please:
+Contributions are welcome. Please follow these steps:
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes (`git commit -m 'Add new feature'`)
+4. Push to the branch (`git push origin feature/your-feature`)
 5. Open a Pull Request
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
 
@@ -383,21 +366,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Airtable](https://airtable.com/) for the database platform
 - [Vercel](https://vercel.com/) for serverless hosting
 - [Google](https://developers.google.com/gmail/api) for Gmail API
-
----
-
-## Support
-
-Having issues? Check out:
-- [Issues](https://github.com/yourusername/job-email-tracker/issues)
-- [Discussions](https://github.com/yourusername/job-email-tracker/discussions)
-
----
-
-<div align="center">
-  
-**Built with ❤️ for job seekers**
-
-[⭐ Star this repo](https://github.com/yourusername/job-email-tracker) if you find it useful!
-
-</div>
