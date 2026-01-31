@@ -2,10 +2,12 @@
     "crons": [
         {
             "path": "/api/cron",
-            "schedule": "0 12 * * *"
+            "schedule": "0 0 * * *"
         }
     ],
-    "env": {
-        "NODE_ENV": "production"
+    "functions": {
+        "api/cron.ts": {
+            "maxDuration": 60
+        }
     }
 }
