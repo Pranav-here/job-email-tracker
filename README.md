@@ -17,7 +17,8 @@ This system intelligently monitors your Gmail inbox for job-related emails and a
 - **AI-Powered Parsing** - Claude 3 Haiku analyzes emails to extract structured application data
 - **Smart Detection** - Advanced multi-layer filtering identifies job emails while filtering out spam and newsletters
 - **Automatic Status Updates** - Tracks application progression (Applied → Interviewing → Offer → Rejected)
-- **Duplicate Prevention** - Hash-based deduplication ensures each application is tracked only once
+- **Smart Stateful Tracking** - Applications are "remembered" in Airtable, so new emails enrich existing rows instead of creating duplicates
+- **Duplicate Prevention** - Checks Airtable first before creating any new record
 - **Airtable Integration** - Centralized database with custom views, filters, and organization
 - **Serverless Deployment** - Runs on Vercel with scheduled cron jobs
 - **Full Observability** - Detailed metrics, success rates, and error tracking
@@ -33,8 +34,8 @@ Gmail Inbox → Smart Filtering → Claude AI Parsing → Airtable Database
 1. **Gmail API** fetches recent emails using advanced search operators
 2. **Multi-layer filtering** identifies job-related emails using 40+ keywords, domain matching, and regex patterns
 3. **Claude AI** extracts structured data from email content with validation
-4. **Deduplication** prevents processing the same email twice
-5. **Airtable** stores applications with smart update logic (only updates when status progresses)
+4. **State Check** - Queries Airtable to see if this application already exists (using Gmail Thread ID)
+5. **Smart Sync** - Updates existing records if new info is found (e.g. status change), or creates a new one if it's fresh
 
 ---
 
@@ -118,17 +119,14 @@ Create a new base in Airtable with a table named **"Applications"** containing t
 
 | Column Name   | Type              | Description                          |
 |---------------|-------------------|--------------------------------------|
-| Email ID      | Single line text  | Unique email identifier              |
-| Date Applied  | Date              | Application submission date          |
+| Gmail Thread ID | Single line text  | **Required** for deduplication       |
+| Gmail Message ID| Single line text  | Unique email identifier              |
 | Company       | Single line text  | Company name                         |
 | Role          | Single line text  | Job position                         |
-| Status        | Single select     | Applied, Interviewing, Offer, Rejected, Ghosted |
-| Email Subject | Long text         | Original email subject               |
-| Email Date    | Date              | Email received date                  |
+| Status        | Single select     | Applied, Phone Screen, Interviewing, Offer, Rejected |
+| Date Applied  | Date              | Application submission date          |
 | Location      | Single line text  | Job location                         |
-| Salary Range  | Single line text  | Salary information                   |
 | Job URL       | URL               | Link to job posting                  |
-| Notes         | Long text         | Additional details                   |
 | Last Updated  | Date              | Record modification timestamp        |
 
 Generate a Personal Access Token:
@@ -273,8 +271,8 @@ Example: If you manually mark an application as "Rejected", subsequent "Applied"
 ### Duplicate Prevention
 
 Prevents processing the same email multiple times using:
-- **SHA-256 hashing** of `emailId + subject + sender`
-- **Airtable record matching** by Email ID (exact match) and Company + Role combination (fuzzy match)
+- **Gmail Thread ID Check**: Before creating any record, the system asks Airtable if this thread ID exists.
+- **Smart Updates**: If it exists, we update the status/details instead of creating a duplicate.
 
 ### Multipart MIME Handling
 
