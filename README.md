@@ -186,7 +186,7 @@ npm run start:manual -- --dry-run
 ```
 
 This command will:
-- Fetch job-related emails from the last 24 hours
+- Fetch job-related emails from the last 24 hours (default lookback window)
 - Parse each email with Claude AI
 - Sync applications to Airtable
 - Display detailed progress and summary metrics
@@ -378,7 +378,11 @@ Ensure your Personal Access Token has the correct scopes (`data.records:read` an
 
 - Verify Gmail search operators in `backend/src/services/gmail.service.ts`
 - Confirm you have job-related emails in the specified timeframe
-- Try extending the search timeframe (default is 24 hours)
+- Try adjusting the search timeframe (default is last 24 hours; override with `?hours=` on `/api/cron`)
+
+### Looking for jobs?
+
+If you want to browse roles yourself, check out [TechCareers](https://techcareers.vercel.app/), a site I built to make tech job searches faster.
 
 ---
 
