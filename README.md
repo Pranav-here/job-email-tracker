@@ -12,13 +12,17 @@ Automated job application tracking system that monitors Gmail for job-related em
 
 This system intelligently monitors your Gmail inbox for job-related emails and automatically syncs application data to Airtable. It uses Claude AI to extract structured information from emails, including company names, job titles, application status, location, salary ranges, and more.
 
+### Live Airtable View
+See a real, continuously updated base (read-only): https://airtable.com/app9bkUoWiUAFiBnZ/tbloR1Rn2ztej795W/viwBIZzOTuBQNFr4d
+
 ### Key Features
 
 - **AI-Powered Parsing** - Claude 3 Haiku analyzes emails to extract structured application data
 - **Smart Detection** - Advanced multi-layer filtering identifies job emails while filtering out spam and newsletters
-- **Automatic Status Updates** - Tracks application progression (Applied → Interviewing → Offer → Rejected)
+- **Automatic Status Updates** - Tracks application progression (Applied -> Interviewing -> Offer -> Rejected)
 - **Smart Stateful Tracking** - Applications are "remembered" in Airtable, so new emails enrich existing rows instead of creating duplicates
-- **Duplicate Prevention** - Checks Airtable first before creating any new record
+- **No Hallucinated Fields** - If data is missing (e.g., salary, location), the app records "N/A" instead of guessing
+- **Duplicate Prevention** - Uses Gmail Thread ID first, then exact Job URL (not just Company/Role) before creating any new record
 - **Airtable Integration** - Centralized database with custom views, filters, and organization
 - **Serverless Deployment** - Runs on Vercel with scheduled cron jobs
 - **Full Observability** - Detailed metrics, success rates, and error tracking
@@ -28,7 +32,7 @@ This system intelligently monitors your Gmail inbox for job-related emails and a
 ## How It Works
 
 ```
-Gmail Inbox → Smart Filtering → Claude AI Parsing → Airtable Database
+Gmail Inbox -> Smart Filtering -> Claude AI Parsing -> Airtable Database
 ```
 
 1. **Gmail API** fetches recent emails using advanced search operators
@@ -50,48 +54,53 @@ Gmail Inbox → Smart Filtering → Claude AI Parsing → Airtable Database
 
 ---
 
-## Quick Start
+## Quick Start (5 minutes)
 
-### Prerequisites
-
-- Node.js 18 or higher
-- Gmail account
-- [Anthropic API key](https://console.anthropic.com/)
-- [Airtable account](https://airtable.com/)
-- [Google Cloud project](https://console.cloud.google.com/) with Gmail API enabled
-
-### Installation
-
+1) Install & clone
 ```bash
-# Clone the repository
 git clone https://github.com/Pranav-here/job-email-tracker.git
 cd job-email-tracker
-
-# Install dependencies
 npm install
 ```
 
-### Configuration
+2) Copy env template
+```bash
+cp .env.example .env
+```
+Fill in:
+- `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` (Google Cloud OAuth)
+- `ANTHROPIC_API_KEY`
+- `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, `AIRTABLE_TABLE_NAME` (usually `Applications`)
 
-Create a `.env` file in the root directory with the following variables:
+3) Get Gmail refresh token
+```bash
+npm run setup:gmail
+```
+This writes `GMAIL_REFRESH_TOKEN` into `.env` (or uses `token.json` locally).
+
+4) Run a dry run (no Airtable writes)
+```bash
+npm run start:manual -- --dry-run
+```
+5) Run for real
+```bash
+npm run start:manual
+```
+You should see new/updated rows in your Airtable base and a summary in the console.
+
+### Required environment variables
 
 ```bash
-# Gmail OAuth
-GMAIL_CLIENT_ID=your_google_client_id
-GMAIL_CLIENT_SECRET=your_google_client_secret
+GMAIL_CLIENT_ID=
+GMAIL_CLIENT_SECRET=
 GMAIL_REDIRECT_URI=http://localhost:3000/oauth2callback
-GMAIL_REFRESH_TOKEN=generated_by_setup_script
-
-# Anthropic AI
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Airtable
-AIRTABLE_API_KEY=pat...
-AIRTABLE_BASE_ID=app...
+GMAIL_REFRESH_TOKEN=generated_by_setup_script   # or provide token.json locally
+ANTHROPIC_API_KEY=
+AIRTABLE_API_KEY=
+AIRTABLE_BASE_ID=
 AIRTABLE_TABLE_NAME=Applications
-
-# Optional
-CRON_SECRET=random_secret_for_security
+CRON_SECRET=optional-but-recommended            # protects the /api/cron endpoint
+GHOSTING_DAYS=45                                # auto-mark ghosted after N days of silence
 LOG_LEVEL=info
 ```
 
@@ -115,19 +124,35 @@ LOG_LEVEL=info
 
 #### 3. Airtable Setup
 
-Create a new base in Airtable with a table named **"Applications"** containing these fields:
+Create a new base in Airtable with a table named **"Applications"** using these fields (matching the current production schema):
 
-| Column Name   | Type              | Description                          |
-|---------------|-------------------|--------------------------------------|
-| Gmail Thread ID | Single line text  | **Required** for deduplication       |
-| Gmail Message ID| Single line text  | Unique email identifier              |
-| Company       | Single line text  | Company name                         |
-| Role          | Single line text  | Job position                         |
-| Status        | Single select     | Applied, Phone Screen, Interviewing, Offer, Rejected |
-| Date Applied  | Date              | Application submission date          |
-| Location      | Single line text  | Job location                         |
-| Job URL       | URL               | Link to job posting                  |
-| Last Updated  | Date              | Record modification timestamp        |
+| Column Name | Type | Notes |
+| --- | --- | --- |
+| Email ID | Single line text | Primary Gmail message ID |
+| Date Applied | Date | YYYY-MM-DD |
+| Company | Single line text | |
+| Role | Single line text | |
+| Status | Single select | Applied, Interviewing, Offer, Rejected, Ghosted |
+| Email Subject | Long text | |
+| Email Date | Date | |
+| Location | Single line text | |
+| Salary Range | Single line text | |
+| Job URL | Single line text | |
+| Notes | Long text | Optional |
+| Last Updated | Date | Auto-set by app |
+| Gmail Thread ID | Single line text | **Required** for deduplication |
+| Gmail Message IDs | Long text | Comma-separated history |
+| Last Email Date | Date | Latest message in thread |
+| Last Email Subject | Single line text | |
+| Last Email From | Single line text | |
+| Last Status Change Date | Date | |
+| Status History | Long text | Appended log |
+| ATS Application ID | Single line text | Optional |
+| Requisition ID | Single line text | Optional |
+| Source ATS | Single select | lever, greenhouse, workday, icims, taleo, smartrecruiters, ashby, jobvite, other |
+| Timeline Text | Long text | Human-readable log |
+| Last Event Type | Single select | application_confirmation, status_update, interview, offer, rejection, other |
+| Gmail Message ID | Single line text | Duplicate of Email ID for convenience |
 
 Generate a Personal Access Token:
 1. Navigate to https://airtable.com/create/tokens
@@ -156,6 +181,8 @@ Test the tracker locally:
 
 ```bash
 npm run start:manual
+# or dry run (no Airtable writes)
+npm run start:manual -- --dry-run
 ```
 
 This command will:
@@ -180,6 +207,12 @@ Verify connectivity to Gmail, Anthropic, and Airtable:
 npm run test:connection
 ```
 
+### Common pitfalls
+- **401 from Gmail**: refresh token expired; rerun `npm run setup:gmail`.
+- **Empty runs**: broaden the lookback window `/api/cron?hours=48` or ensure job emails exist in that period.
+- **Duplicate rows**: make sure `Gmail Thread ID` and `Gmail Message IDs` columns exist in Airtable with matching names.
+- **Unsecured cron**: set `CRON_SECRET` in Vercel (and use it in the `Authorization: Bearer ...` header).
+
 ---
 
 ## Deployment
@@ -199,11 +232,17 @@ vercel login
 vercel
 
 # Configure environment variables in Vercel Dashboard
-# Navigate to: Project Settings → Environment Variables
+# Navigate to: Project Settings -> Environment Variables
 # Add all variables from your .env file (especially GMAIL_REFRESH_TOKEN)
 ```
 
-The cron job is configured to run daily at midnight UTC. You can modify the schedule in `vercel.json`.
+The cron job is configured to run daily at midnight UTC and looks back 24 hours by default. You can modify the schedule in `vercel.json`.
+To manually trigger (with optional custom lookback hours) send:
+
+```bash
+curl -X POST "https://<your-vercel-domain>/api/cron?hours=24" \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
 
 ---
 
@@ -260,11 +299,13 @@ The system uses multiple layers of filtering to identify job-related emails:
 
 ### Intelligent Status Progression
 
-The system implements a status hierarchy that only allows forward progression:
+The system keeps forward-only progression across Airtable's select values:
 
 ```
-Applied (1) → Interviewing (2) → Offer (3) → Rejected (4) → Ghosted (5)
+Applied -> Interviewing -> Offer/Rejected/Ghosted (final)
 ```
+
+Auto-ghost: if no new email/status is seen for 45 days while in Applied/Interviewing, the app marks it Ghosted (it will still progress if new activity arrives).
 
 Example: If you manually mark an application as "Rejected", subsequent "Applied" status emails will not overwrite this status.
 
@@ -285,7 +326,7 @@ Recursively extracts text content from complex email structures, with preference
 Each execution provides detailed metrics:
 
 ```
-📊 Summary:
+Summary:
    Emails Fetched:      5
    Emails Processed:    5
    Jobs Found:          2
@@ -316,6 +357,7 @@ Logs include:
 
 ## Troubleshooting
 
+- **Security reset**: If any secrets were ever committed (e.g., `token.json` or the old `scripts/set-vercel-env.ps1`), regenerate Gmail refresh tokens, Airtable PATs, and Anthropic keys, then update `.env` and Vercel env vars.
 ### Gmail 401 Unauthorized
 
 Your refresh token may have expired. Re-run the Gmail setup:
