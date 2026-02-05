@@ -1,38 +1,32 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
 import { EmailMessage } from '../../../common/types/email.types';
-import { JobApplication, ApplicationStatus } from '../../../common/types/job.types';
+import { JobApplication, ApplicationStatus, EventType } from '../../../common/types/job.types';
 import { logger } from '../utils/logger';
+import { extractCompanyName, extractUrl, normalizeLocation, normalizeSalary } from '../utils/parser-helpers';
 
 export class AIService {
     private client: Anthropic;
     private systemPrompt = `
-You are an expert recruitment data parser. Your goal is to extract structured job application data from emails.
-Analyze the email content and determine:
-1. Company Name
-2. Role/Position Title
-3. Status (Applied, Rejected, Interview, Offer, etc.)
-4. Location (if mentioned)
-5. Salary (if mentioned)
-
-Return ONLY valid JSON matching this schema:
+You are an expert recruitment data parser. Extract structured job application data from emails.
+Return ONLY JSON shaped as:
 {
   "company": "string",
   "role": "string",
-  "status": "Applied" | "Rejected" | "Interview" | "Offer" | "Withdrawn" | "Unknown",
+  "status": "Applied" | "Interviewing" | "Offer" | "Rejected" | "Ghosted" | "Withdrawn" | "Unknown",
   "location": "string | null",
   "salary": "string | null",
-  "jobUrl": "string | null (URL to job post or application)"
+  "jobUrl": "string | null"
 }
-
 Rules:
-- If the email is a rejection (e.g., "not moving forward", "went with another candidate"), set status to "Rejected".
-- If it's a new application confirmation, set status to "Applied".
-- If it's an invitation for a preliminary chat, phone screen, or recruiter call, set status to "Phone Screen".
-- If it's a coding challenge, technical screen, or system design round, set status to "Technical Interview".
-- If it's a final round or onsite interview, set status to "Onsite Interview".
-- If strict company name isn't clear, infer it from the sender email domain or context.
-- Do not include explanations, only the JSON object.
+- If a field is absent, write "N/A" (do not invent or guess).
+- Rejection phrasing ("not moving forward", "unfortunately") -> Rejected
+- Invitation / scheduling / screen / interview / challenge -> Interviewing
+- Offer / compensation -> Offer
+- Only mark Ghosted if the email itself indicates ghosting/no response; otherwise leave as parsed.
+- Receipt/confirmation only -> Applied
+- Prefer sender domain when inferring company.
+- Only output a single JSON object, no commentary, no code fences.
 `;
 
     constructor() {
@@ -43,11 +37,12 @@ Rules:
 
     async parseEmail(email: EmailMessage): Promise<JobApplication | null> {
         try {
+            const contentBody = (email.body || '').substring(0, 8000);
             const content = `
 Subject: ${email.subject}
 From: ${email.from}
-Body: 
-${email.body.substring(0, 8000)} {/* Truncate to avoid context limit limits */}
+Body:
+${contentBody}
 `;
 
             const response = await this.client.messages.create({
@@ -72,17 +67,28 @@ ${email.body.substring(0, 8000)} {/* Truncate to avoid context limit limits */}
 
             const parsed = JSON.parse(jsonStr);
 
-            return {
+            const status = this.normalizeStatus(parsed.status);
+
+            const location = this.pickValue(parsed.location, normalizeLocation(email.body));
+            const salary = this.pickValue(parsed.salary, normalizeSalary(email.body));
+            const jobUrl = this.pickValue(parsed.jobUrl, extractUrl(email.body));
+            const company = this.pickValue(parsed.company, extractCompanyName(email.body, email.from));
+            const role = this.pickValue(parsed.role, 'N/A');
+
+            const result: JobApplication = {
                 gmailMessageId: email.id,
                 gmailThreadId: email.threadId,
-                company: parsed.company || 'Unknown',
-                role: parsed.role || 'Unknown',
-                status: this.normalizeStatus(parsed.status),
+                company,
+                role,
+                status,
                 appliedDate: email.date,
-                location: parsed.location || undefined,
-                salary: parsed.salary || undefined,
-                jobUrl: parsed.jobUrl || undefined,
+                location,
+                salary,
+                jobUrl,
+                lastEventType: this.mapEventType(status)
             };
+
+            return result;
 
         } catch (error) {
             logger.error('Error parsing email with AI', { error });
@@ -97,14 +103,36 @@ ${email.body.substring(0, 8000)} {/* Truncate to avoid context limit limits */}
 
     private normalizeStatus(status: string): ApplicationStatus {
         const s = status.toLowerCase();
-        if (s.includes('reject') || s.includes('decline')) return ApplicationStatus.REJECTED;
-        if (s.includes('phone') || s.includes('screen') || s.includes('chat')) return ApplicationStatus.PHONE_SCREEN;
-        if (s.includes('technical') || s.includes('coding') || s.includes('system design')) return ApplicationStatus.TECHNICAL_INTERVIEW;
-        if (s.includes('onsite') || s.includes('final')) return ApplicationStatus.ONSITE_INTERVIEW;
-        if (s.includes('interview')) return ApplicationStatus.TECHNICAL_INTERVIEW; // Default fallback
-        if (s.includes('offer')) return ApplicationStatus.OFFER;
-        if (s.includes('applied') || s.includes('received')) return ApplicationStatus.APPLIED;
-        return ApplicationStatus.UNKNOWN;
+        if (s.includes('reject') || s.includes('decline') || s.includes('unsuccessful')) return ApplicationStatus.REJECTED;
+        if (s.includes('offer') || s.includes('compensation')) return ApplicationStatus.OFFER;
+        if (s.includes('ghost')) return ApplicationStatus.GHOSTED;
+        if (s.includes('withdraw')) return ApplicationStatus.WITHDRAWN;
+        if (s.includes('interview') || s.includes('screen') || s.includes('challenge') || s.includes('onsite') || s.includes('assessment')) return ApplicationStatus.INTERVIEWING;
+        if (s.includes('applied') || s.includes('received') || s.includes('submitted') || s.includes('application')) return ApplicationStatus.APPLIED;
+        return ApplicationStatus.APPLIED;
+    }
+
+    private mapEventType(status: ApplicationStatus): EventType {
+        switch (status) {
+            case ApplicationStatus.OFFER:
+                return EventType.OFFER;
+            case ApplicationStatus.REJECTED:
+                return EventType.REJECTION;
+            case ApplicationStatus.INTERVIEWING:
+                return EventType.INTERVIEW;
+            case ApplicationStatus.GHOSTED:
+                return EventType.STATUS_UPDATE;
+            default:
+                return EventType.APPLICATION_CONFIRMATION;
+        }
+    }
+
+    private pickValue(primary: any, fallback: any): string {
+        const cleanedPrimary = typeof primary === 'string' ? primary.trim() : '';
+        if (cleanedPrimary && cleanedPrimary.toLowerCase() !== 'n/a') return cleanedPrimary;
+        const cleanedFallback = typeof fallback === 'string' ? fallback.trim() : '';
+        if (cleanedFallback) return cleanedFallback;
+        return 'N/A';
     }
 }
 
