@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
 // Load environment variables
 dotenv.config();
@@ -25,6 +26,7 @@ export const config = {
     app: {
         cronSecret: process.env.CRON_SECRET || '',
         logLevel: process.env.LOG_LEVEL || 'info',
+        ghostingDays: parseInt(process.env.GHOSTING_DAYS || '45', 10),
     },
 };
 
@@ -38,7 +40,18 @@ const requiredKeys = [
 
 export function validateConfig() {
     const missing = requiredKeys.filter((key) => !process.env[key]);
+
+    const hasLocalToken = fs.existsSync(path.resolve(process.cwd(), 'token.json'));
+    if (!process.env.GMAIL_REFRESH_TOKEN && !hasLocalToken) {
+        missing.push('GMAIL_REFRESH_TOKEN (or token.json)');
+    }
+
     if (missing.length > 0) {
         throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    }
+
+    const isProd = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+    if (isProd && !process.env.CRON_SECRET) {
+        console.warn('Warning: CRON_SECRET is not set. Scheduled endpoint will be unsecured in production.');
     }
 }
