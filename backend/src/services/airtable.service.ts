@@ -1,6 +1,6 @@
 import Airtable from 'airtable';
 import { config } from '../config';
-import { JobApplication, ApplicationStatus } from '../../../common/types/job.types';
+import { JobApplication, ApplicationStatus, EventType } from '../../../common/types/job.types';
 import { logger } from '../utils/logger';
 
 export class AirtableService {
@@ -12,31 +12,54 @@ export class AirtableService {
         this.table = this.base(config.airtable.tableName);
     }
 
-    async createOrUpdateApplication(app: JobApplication): Promise<void> {
+    private escapeFormulaValue(value: string): string {
+        return value.replace(/"/g, '\\"');
+    }
+
+    async findPotentialDuplicate(app: JobApplication): Promise<Airtable.Record<any> | null> {
+        // Conservative heuristic: only match on exact Job URL when threadId is absent.
+        if (!app.jobUrl || app.jobUrl.toLowerCase() === 'n/a') return null;
+
+        const result = await this.table
+            .select({
+                filterByFormula: `{Job URL} = "${this.escapeFormulaValue(app.jobUrl)}"`,
+                maxRecords: 1,
+            })
+            .firstPage();
+        return result[0] || null;
+    }
+
+    async createOrUpdateApplication(
+        app: JobApplication,
+        emailMeta?: { subject: string; from: string; date: Date },
+        existingRecord?: Airtable.Record<any>
+    ): Promise<{ action: 'created' | 'updated' | 'skipped'; reason?: string }> {
         try {
-            // 1. Check for duplicate using Gmail Thread ID
-            const existingRecords = await this.table.select({
-                filterByFormula: `{Gmail Thread ID} = '${app.gmailThreadId}'`,
-                maxRecords: 1
-            }).firstPage();
+            // 1. Check for duplicate using provided record, thread ID, or other heuristics (Job URL, Company+Role)
+            let record =
+                existingRecord ||
+                (await this.findRecordByThreadId(app.gmailThreadId)) ||
+                (await this.findPotentialDuplicate(app));
 
-            if (existingRecords.length > 0) {
+            const status = this.mapStatus(app.status);
+            const eventType = this.mapEventType(app.lastEventType);
+            const today = this.formatDate(new Date());
+            const emailDate = this.formatDate(emailMeta?.date || app.appliedDate);
+            const subject = emailMeta?.subject || '';
+            const from = emailMeta?.from || '';
+
+            if (record) {
                 // UPDATE existing record
-                const record = existingRecords[0];
-                const currentStatus = record.get('Status') as string;
+                const currentStatus = record.get('Status') as string | undefined;
 
-                // Only update if status implies a progression (e.g. Applied -> Rejected)
-                // or if we simply want to just log the latest activity.
-                // For now, let's always update Status if it's different and not 'Unknown'
-                // AND avoid overwriting a "final" state if the new state is "Applied" (which might happen if parsing same email thread again)
-
-                // Check if we can enrich data (e.g. missing location/salary)
                 const updates: any = {};
                 let hasUpdates = false;
 
                 // Status Update
-                if (this.shouldUpdateStatus(currentStatus, app.status)) {
-                    updates['Status'] = app.status;
+                if (status && this.shouldUpdateStatus(currentStatus, status)) {
+                    updates['Status'] = status;
+                    updates['Last Status Change Date'] = emailDate;
+                    updates['Last Event Type'] = eventType;
                     hasUpdates = true;
                 }
 
@@ -49,35 +72,73 @@ export class AirtableService {
                     updates['Job URL'] = app.jobUrl;
                     hasUpdates = true;
                 }
-
-                if (hasUpdates) {
-                    updates['Last Updated'] = new Date().toISOString().split('T')[0];
-                    logger.info(`Updating record for ${app.company}: ${JSON.stringify(updates)}`);
-                    await this.table.update(record.id, updates);
-                } else {
-                    logger.info(`Skipping update for ${app.company}: No new data or status progression.`);
+                if (!record.get('Salary Range') && app.salary) {
+                    updates['Salary Range'] = app.salary;
+                    hasUpdates = true;
                 }
-                return;
+
+                // Always update latest email metadata
+                updates['Last Email Date'] = emailDate;
+                updates['Last Email Subject'] = subject;
+                updates['Last Email From'] = from;
+                updates['Last Updated'] = today;
+
+                // Track message ids history
+                const existingIdsRaw = (record.get('Gmail Message IDs') as string) || '';
+                const idSet = new Set(
+                    existingIdsRaw
+                        .split(',')
+                        .map((x) => x.trim())
+                        .filter(Boolean)
+                );
+                idSet.add(app.gmailMessageId);
+                updates['Gmail Message IDs'] = Array.from(idSet).join(', ');
+
+                // Timeline text / status history
+                const historyEntry = `${emailDate} - ${status || 'Applied'}${subject ? ` | ${subject}` : ''}`.trim();
+                const priorHistory = (record.get('Status History') as string) || '';
+                const historyLines = priorHistory ? priorHistory.split('\n') : [];
+                if (!historyLines.includes(historyEntry)) {
+                    updates['Status History'] = priorHistory ? `${priorHistory}\n${historyEntry}` : historyEntry;
+                    updates['Timeline Text'] = updates['Status History'];
+                }
+
+                logger.info(`Updating record for ${app.company}: ${JSON.stringify(updates)}`);
+                await this.table.update(record.id, updates);
+                return { action: 'updated' };
             }
 
             // 2. Create NEW record
             await this.table.create([
                 {
                     fields: {
+                        'Email ID': app.gmailMessageId,
+                        'Email Subject': subject,
+                        'Email Date': emailDate,
                         'Company': app.company,
                         'Role': app.role,
-                        'Status': app.status,
-                        'Date Applied': app.appliedDate.toISOString().split('T')[0], // YYYY-MM-DD
+                        'Status': status || ApplicationStatus.APPLIED,
+                        'Date Applied': this.formatDate(app.appliedDate), // YYYY-MM-DD
                         'Location': app.location || '',
+                        'Salary Range': app.salary || '',
                         'Job URL': app.jobUrl || '',
                         'Gmail Message ID': app.gmailMessageId,
                         'Gmail Thread ID': app.gmailThreadId,
-                        'Last Updated': new Date().toISOString().split('T')[0]
+                        'Gmail Message IDs': app.gmailMessageId,
+                        'Last Email Date': emailDate,
+                        'Last Email Subject': subject,
+                        'Last Email From': from,
+                        'Last Status Change Date': emailDate,
+                        'Last Updated': today,
+                        'Last Event Type': eventType,
+                        'Status History': `${emailDate} - ${status || ApplicationStatus.APPLIED}${subject ? ` | ${subject}` : ''}`,
+                        'Timeline Text': `${emailDate} - ${status || ApplicationStatus.APPLIED}${subject ? ` | ${subject}` : ''}`
                     }
                 }
             ]);
 
             logger.info(`Created new application record: ${app.company} - ${app.role}`);
+            return { action: 'created' };
 
         } catch (error) {
             logger.error('Airtable Error', { error });
@@ -85,21 +146,74 @@ export class AirtableService {
         }
     }
 
-    private shouldUpdateStatus(current: string, incoming: ApplicationStatus): boolean {
+    async findRecordByThreadId(threadId: string): Promise<Airtable.Record<any> | null> {
+        const result = await this.table
+            .select({
+                filterByFormula: `{Gmail Thread ID} = '${threadId}'`,
+                maxRecords: 1,
+            })
+            .firstPage();
+        return result[0] || null;
+    }
+
+    private shouldUpdateStatus(current: string | undefined, incoming: ApplicationStatus): boolean {
+        if (!incoming || incoming === ApplicationStatus.UNKNOWN) return false;
         if (!current) return true;
-        if (incoming === ApplicationStatus.UNKNOWN) return false;
         if (current === incoming) return false;
 
-        // Don't revert from Rejected/Offer back to Applied
-        const finalStates = ['Rejected', 'Offer', 'Withdrawn'];
-        if (finalStates.includes(current) && incoming === ApplicationStatus.APPLIED) {
+        const rank: Record<string, number> = {
+            [ApplicationStatus.APPLIED]: 1,
+            [ApplicationStatus.INTERVIEWING]: 2,
+            [ApplicationStatus.GHOSTED]: 2,
+            [ApplicationStatus.OFFER]: 3,
+            [ApplicationStatus.REJECTED]: 3,
+            [ApplicationStatus.WITHDRAWN]: 3,
+        };
+
+        const currentRank = rank[current] ?? 0;
+        const incomingRank = rank[incoming] ?? 0;
+
+        // Block swapping between final states
+        if (currentRank === incomingRank && currentRank === 3 && current !== incoming) {
             return false;
         }
 
-        // Allow user to withdraw at any point
-        if (incoming === ApplicationStatus.WITHDRAWN) return true;
+        return incomingRank >= currentRank;
+    }
 
-        return true;
+    private mapStatus(status: ApplicationStatus): ApplicationStatus {
+        switch (status) {
+            case ApplicationStatus.INTERVIEWING:
+            case ApplicationStatus.OFFER:
+            case ApplicationStatus.REJECTED:
+            case ApplicationStatus.GHOSTED:
+            case ApplicationStatus.APPLIED:
+                return status;
+            case ApplicationStatus.WITHDRAWN:
+                return ApplicationStatus.REJECTED; // fallback since table lacks Withdrawn
+            default:
+                return ApplicationStatus.APPLIED;
+        }
+    }
+
+    private mapEventType(event?: EventType): string {
+        switch (event) {
+            case EventType.OFFER:
+                return 'offer';
+            case EventType.REJECTION:
+                return 'rejection';
+            case EventType.INTERVIEW:
+                return 'interview';
+            case EventType.STATUS_UPDATE:
+                return 'status_update';
+            default:
+                return 'application_confirmation';
+        }
+    }
+
+    private formatDate(date: Date | undefined): string {
+        if (!date) return '';
+        return date.toISOString().split('T')[0];
     }
 }
 
