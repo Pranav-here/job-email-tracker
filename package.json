@@ -1,38 +1,33 @@
 {
   "name": "job-email-tracker",
   "version": "1.0.0",
-  "description": "Automated job application tracking via Outlook emails → Airtable",
-  "main": "index.js",
+  "description": "Automated job application tracking via Gmail emails → Airtable",
+  "main": "backend/src/api/cron.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest --passWithNoTests",
+    "lint": "eslint . --ext .ts",
+    "setup:gmail": "tsx scripts/setup-gmail.ts",
+    "test:connection": "tsx scripts/test-connection.ts",
+    "validate": "tsx scripts/validate-env.ts",
+    "start:manual": "tsx scripts/manual-trigger.ts",
+    "dev": "vercel dev"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Pranav-here/job-email-tracker.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/Pranav-here/job-email-tracker/issues"
-  },
-  "homepage": "https://github.com/Pranav-here/job-email-tracker#readme",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.2",
-    "@azure/msal-node": "^5.0.2",
-    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "@anthropic-ai/sdk": "^0.30.0",
     "airtable": "^0.12.2",
-    "date-fns": "^4.1.0",
-    "zod": "^4.3.5"
+    "date-fns": "^3.0.0",
+    "dotenv": "^16.4.1",
+    "googleapis": "^131.0.0",
+    "html-to-text": "^8.2.1"
   },
   "devDependencies": {
-    "@types/node": "^25.0.9",
-    "@vercel/node": "^5.5.23",
-    "dotenv": "^17.2.3",
-    "eslint": "^9.39.2",
-    "prettier": "^3.8.0",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@vercel/node": "^3.0.14",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.4",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
   }
 }
