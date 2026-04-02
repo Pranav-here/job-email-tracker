@@ -20,7 +20,6 @@
   },
   "include": [
     "backend/**/*.ts",
-    "common/**/*.ts",
     "scripts/**/*.ts"
   ],
   "exclude": [

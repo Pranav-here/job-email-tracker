@@ -3,7 +3,7 @@ import { aiService } from '../backend/src/services/ai.service';
 import { airtableService } from '../backend/src/services/airtable.service';
 import { validateConfig } from '../backend/src/config';
 import { logger } from '../backend/src/utils/logger';
-import { ApplicationStatus, EventType } from '../common/types/job.types';
+import { ApplicationStatus, EventType } from '../backend/src/types/job.types';
 import { shouldMarkGhosted } from '../backend/src/utils/ghosting';
 import { config } from '../backend/src/config';
 

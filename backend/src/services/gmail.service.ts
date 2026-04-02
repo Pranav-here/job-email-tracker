@@ -2,7 +2,7 @@ import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import fs from 'fs';
 import path from 'path';
-import { EmailMessage } from '../../../common/types/email.types';
+import { EmailMessage } from '../types/email.types';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { isJobRelated } from '../utils/email-classifier';

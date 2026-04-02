@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isJobRelated } from '../../src/utils/email-classifier';
-import { EmailMessage } from '../../../common/types/email.types';
+import { EmailMessage } from '../../src/types/email.types';
 
 const buildEmail = (partial: Partial<EmailMessage>): EmailMessage => ({
     id: 'id',

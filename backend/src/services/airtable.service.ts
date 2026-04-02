@@ -1,6 +1,6 @@
 import Airtable from 'airtable';
 import { config } from '../config';
-import { JobApplication, ApplicationStatus, EventType } from '../../../common/types/job.types';
+import { JobApplication, ApplicationStatus, EventType } from '../types/job.types';
 import { logger } from '../utils/logger';
 import { withRetry } from '../utils/retry';
 

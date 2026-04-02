@@ -1,4 +1,4 @@
-import { EmailMessage } from '../../../common/types/email.types';
+import { EmailMessage } from '../types/email.types';
 
 export function isJobRelated(email: EmailMessage): boolean {
     const subject = email.subject.toLowerCase();

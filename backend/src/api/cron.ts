@@ -5,7 +5,7 @@ import { airtableService } from '../services/airtable.service';
 import { logger } from '../utils/logger';
 import { config, validateConfig } from '../config';
 import { metrics } from '../utils/metrics';
-import { ApplicationStatus, EventType } from '../../common/types/job.types';
+import { ApplicationStatus, EventType } from '../types/job.types';
 import { shouldMarkGhosted } from '../utils/ghosting';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

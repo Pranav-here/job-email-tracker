@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
-import { EmailMessage } from '../../../common/types/email.types';
-import { JobApplication, ApplicationStatus, EventType } from '../../../common/types/job.types';
+import { EmailMessage } from '../types/email.types';
+import { JobApplication, ApplicationStatus, EventType } from '../types/job.types';
 import { logger } from '../utils/logger';
 import { extractCompanyName, extractUrl, normalizeLocation, normalizeSalary } from '../utils/parser-helpers';
 
