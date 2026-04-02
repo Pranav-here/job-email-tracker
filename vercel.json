@@ -1,7 +1,8 @@
 {
     "functions": {
         "api/cron.ts": {
-            "maxDuration": 60
+            "maxDuration": 60,
+            "includeFiles": "backend/**,common/**"
         }
     }
 }

@@ -14,7 +14,9 @@ async function main() {
         const isDryRun = process.argv.includes('--dry-run');
 
         // --hours flag: npm run start:manual -- --hours 48
-        const hoursArg = process.argv.find(a => a.startsWith('--hours=')) || process.argv[process.argv.indexOf('--hours') + 1];
+        const hoursArgIdx = process.argv.indexOf('--hours');
+        const hoursArg = process.argv.find(a => a.startsWith('--hours=')) ||
+            (hoursArgIdx !== -1 ? process.argv[hoursArgIdx + 1] : undefined);
         const hours = hoursArg && !hoursArg.startsWith('--') ? parseInt(hoursArg) : DEFAULT_LOOKBACK_HOURS;
 
         logger.info(`Starting manual job application sync (last ${hours}h)${isDryRun ? ' [DRY RUN]' : ''}...`);
