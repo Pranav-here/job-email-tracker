@@ -2,6 +2,7 @@ import Airtable from 'airtable';
 import { config } from '../config';
 import { JobApplication, ApplicationStatus, EventType } from '../../../common/types/job.types';
 import { logger } from '../utils/logger';
+import { withRetry } from '../utils/retry';
 
 export class AirtableService {
     private base: Airtable.Base;
@@ -17,16 +18,60 @@ export class AirtableService {
     }
 
     async findPotentialDuplicate(app: JobApplication): Promise<Airtable.Record<any> | null> {
-        // Conservative heuristic: only match on exact Job URL when threadId is absent.
-        if (!app.jobUrl || app.jobUrl.toLowerCase() === 'n/a') return null;
+        const isNa = (v?: string) => !v || v.toLowerCase() === 'n/a';
 
-        const result = await this.table
-            .select({
-                filterByFormula: `{Job URL} = "${this.escapeFormulaValue(app.jobUrl)}"`,
-                maxRecords: 1,
-            })
-            .firstPage();
-        return result[0] || null;
+        // 1. Match on exact Job URL (most reliable)
+        if (!isNa(app.jobUrl)) {
+            const result = await withRetry(
+                () => this.table
+                    .select({
+                        filterByFormula: `{Job URL} = "${this.escapeFormulaValue(app.jobUrl!)}"`,
+                        maxRecords: 1,
+                    })
+                    .firstPage(),
+                { retries: 3, backoff: 2000, factor: 2 },
+                'airtable.findPotentialDuplicate.url'
+            );
+            if (result[0]) return result[0];
+        }
+
+        // 2. Fall back to Company + Role exact match
+        if (!isNa(app.company) && !isNa(app.role)) {
+            const result = await withRetry(
+                () => this.table
+                    .select({
+                        filterByFormula: `AND({Company} = "${this.escapeFormulaValue(app.company)}", {Role} = "${this.escapeFormulaValue(app.role)}")`,
+                        maxRecords: 1,
+                    })
+                    .firstPage(),
+                { retries: 3, backoff: 2000, factor: 2 },
+                'airtable.findPotentialDuplicate.companyRole'
+            );
+            if (result[0]) return result[0];
+        }
+
+        // 3. Company + base role prefix match
+        // Handles cases where the AI extracts a longer role name from a follow-up email
+        // e.g. "Software Engineer 1" vs "Software Engineer 1 - Uptime Partnership"
+        if (!isNa(app.company) && !isNa(app.role)) {
+            const baseRole = app.role.split(' - ')[0].trim();
+            if (baseRole !== app.role) {
+                const result = await withRetry(
+                    () => this.table
+                        .select({
+                            // FIND returns 1-based index; = 1 means the Role field starts with baseRole
+                            filterByFormula: `AND({Company} = "${this.escapeFormulaValue(app.company)}", FIND("${this.escapeFormulaValue(baseRole)}", {Role}) = 1)`,
+                            maxRecords: 1,
+                        })
+                        .firstPage(),
+                    { retries: 3, backoff: 2000, factor: 2 },
+                    'airtable.findPotentialDuplicate.baseRole'
+                );
+                if (result[0]) return result[0];
+            }
+        }
+
+        return null;
     }
 
     async createOrUpdateApplication(
@@ -104,38 +149,46 @@ export class AirtableService {
                 }
 
                 logger.info(`Updating record for ${app.company}: ${JSON.stringify(updates)}`);
-                await this.table.update(record.id, updates);
+                await withRetry(
+                    () => this.table.update(record!.id, updates),
+                    { retries: 3, backoff: 2000, factor: 2 },
+                    'airtable.update'
+                );
                 return { action: 'updated' };
             }
 
             // 2. Create NEW record
-            await this.table.create([
-                {
-                    fields: {
-                        'Email ID': app.gmailMessageId,
-                        'Email Subject': subject,
-                        'Email Date': emailDate,
-                        'Company': app.company,
-                        'Role': app.role,
-                        'Status': status || ApplicationStatus.APPLIED,
-                        'Date Applied': this.formatDate(app.appliedDate), // YYYY-MM-DD
-                        'Location': app.location || '',
-                        'Salary Range': app.salary || '',
-                        'Job URL': app.jobUrl || '',
-                        'Gmail Message ID': app.gmailMessageId,
-                        'Gmail Thread ID': app.gmailThreadId,
-                        'Gmail Message IDs': app.gmailMessageId,
-                        'Last Email Date': emailDate,
-                        'Last Email Subject': subject,
-                        'Last Email From': from,
-                        'Last Status Change Date': emailDate,
-                        'Last Updated': today,
-                        'Last Event Type': eventType,
-                        'Status History': `${emailDate} - ${status || ApplicationStatus.APPLIED}${subject ? ` | ${subject}` : ''}`,
-                        'Timeline Text': `${emailDate} - ${status || ApplicationStatus.APPLIED}${subject ? ` | ${subject}` : ''}`
+            await withRetry(
+                () => this.table.create([
+                    {
+                        fields: {
+                            'Email ID': app.gmailMessageId,
+                            'Email Subject': subject,
+                            'Email Date': emailDate,
+                            'Company': app.company,
+                            'Role': app.role,
+                            'Status': status || ApplicationStatus.APPLIED,
+                            'Date Applied': this.formatDate(app.appliedDate), // YYYY-MM-DD
+                            'Location': app.location || '',
+                            'Salary Range': app.salary || '',
+                            'Job URL': app.jobUrl || '',
+                            'Gmail Message ID': app.gmailMessageId,
+                            'Gmail Thread ID': app.gmailThreadId,
+                            'Gmail Message IDs': app.gmailMessageId,
+                            'Last Email Date': emailDate,
+                            'Last Email Subject': subject,
+                            'Last Email From': from,
+                            'Last Status Change Date': emailDate,
+                            'Last Updated': today,
+                            'Last Event Type': eventType,
+                            'Status History': `${emailDate} - ${status || ApplicationStatus.APPLIED}${subject ? ` | ${subject}` : ''}`,
+                            'Timeline Text': `${emailDate} - ${status || ApplicationStatus.APPLIED}${subject ? ` | ${subject}` : ''}`
+                        }
                     }
-                }
-            ]);
+                ]),
+                { retries: 3, backoff: 2000, factor: 2 },
+                'airtable.create'
+            );
 
             logger.info(`Created new application record: ${app.company} - ${app.role}`);
             return { action: 'created' };
@@ -147,12 +200,16 @@ export class AirtableService {
     }
 
     async findRecordByThreadId(threadId: string): Promise<Airtable.Record<any> | null> {
-        const result = await this.table
-            .select({
-                filterByFormula: `{Gmail Thread ID} = '${threadId}'`,
-                maxRecords: 1,
-            })
-            .firstPage();
+        const result = await withRetry(
+            () => this.table
+                .select({
+                    filterByFormula: `{Gmail Thread ID} = '${threadId}'`,
+                    maxRecords: 1,
+                })
+                .firstPage(),
+            { retries: 3, backoff: 2000, factor: 2 },
+            'airtable.findRecordByThreadId'
+        );
         return result[0] || null;
     }
 

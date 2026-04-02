@@ -103,6 +103,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 stats.errors++;
                 metrics.recordError('email_processing', err instanceof Error ? err.message : 'Unknown error');
             }
+
+            // Throttle to stay well under Airtable's 5 req/sec limit (~3 calls per email)
+            await new Promise(resolve => setTimeout(resolve, 700));
         }
 
         // 5. Finalize

@@ -26,6 +26,9 @@ Rules:
 - Only mark Ghosted if the email itself indicates ghosting/no response; otherwise leave as parsed.
 - Receipt/confirmation only -> Applied
 - Prefer sender domain when inferring company.
+- NEVER use an ATS platform name as the company. Common ATS platforms to ignore as company names: Greenhouse, Lever, Workday, Ashby, BambooHR, SmartRecruiters, Jobvite, iCIMS, Taleo, Breezy, JazzHR, Recruitee.
+- If this email is a job alert digest, job board notification, or bulk "new jobs matching your profile" email rather than a direct application confirmation/update, return: {"company":"N/A","role":"N/A","status":"Unknown","location":"N/A","salary":"N/A","jobUrl":"N/A"}
+- If the role cannot be determined at all (not just absent but truly unknown), write "N/A".
 - Only output a single JSON object, no commentary, no code fences.
 `;
 
@@ -46,7 +49,7 @@ ${contentBody}
 `;
 
             const response = await this.client.messages.create({
-                model: config.detailedAI.model || 'claude-3-haiku-20240307',
+                model: config.detailedAI.model || 'claude-haiku-4-5-20251001',
                 max_tokens: 1024,
                 system: this.systemPrompt,
                 messages: [{ role: 'user', content: content }],
@@ -74,6 +77,13 @@ ${contentBody}
             const jobUrl = this.pickValue(parsed.jobUrl, extractUrl(email.body));
             const company = this.pickValue(parsed.company, extractCompanyName(email.body, email.from));
             const role = this.pickValue(parsed.role, 'N/A');
+
+            // Reject records with no meaningful data (digest/alert emails, failed parses)
+            const isNa = (v: string) => !v || v.toLowerCase() === 'n/a';
+            if (isNa(company) || isNa(role)) {
+                logger.warn(`Skipping email ${email.id}: missing company or role after AI parse`);
+                return null;
+            }
 
             const result: JobApplication = {
                 gmailMessageId: email.id,

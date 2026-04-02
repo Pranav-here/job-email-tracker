@@ -86,7 +86,11 @@ export class GmailService {
             logger.info(`Fetched ${emails.length} relevant emails from last ${hours} hours`);
             return emails;
 
-        } catch (error) {
+        } catch (error: any) {
+            if (error?.response?.data?.error === 'invalid_grant' || error?.message?.includes('invalid_grant')) {
+                logger.error('Gmail token expired or revoked. Run: npm run setup:gmail');
+                throw new Error('invalid_grant: Gmail token expired. Run: npm run setup:gmail');
+            }
             logger.error('Error fetching emails', { error });
             throw error;
         }

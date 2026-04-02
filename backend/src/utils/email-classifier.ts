@@ -19,14 +19,34 @@ export function isJobRelated(email: EmailMessage): boolean {
         'ashby', 'bamboohr', 'smartrecruiters', 'jobvite'
     ];
 
-    // 3. Negative keywords (spam, newsletters, etc.)
+    // 3. Negative keywords (spam, newsletters, job alerts, etc.)
     const negativeKeywords = [
         'newsletter', 'digest', 'subscribe', 'webinar', 'marketing',
         'promo', 'verify your email', 'reset password', 'security alert',
         'signin', 'login', 'verification code'
     ];
 
+    // Job alert / digest subject patterns — these are notifications, not application emails
+    const jobAlertSubjectPatterns = [
+        'new jobs posted',
+        'new job opportunities',
+        'jobs that match',
+        'jobs posted from',
+        'looking for a new job',
+        'new teaching assistant jobs',
+        'jobs have been posted',
+        'job alert',
+        'jobs near you',
+        'recommended jobs',
+        'suggested jobs',
+        'your job matches',
+    ];
+
     if (negativeKeywords.some(k => subject.includes(k) || from.includes(k))) {
+        return false;
+    }
+
+    if (jobAlertSubjectPatterns.some(p => subject.includes(p))) {
         return false;
     }
 
