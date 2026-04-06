@@ -3,6 +3,7 @@ import { config } from '../config';
 import { EmailMessage } from '../types/email.types';
 import { JobApplication, ApplicationStatus, EventType } from '../types/job.types';
 import { logger } from '../utils/logger';
+import { withRetry } from '../utils/retry';
 import { extractCompanyName, extractUrl, normalizeLocation, normalizeSalary } from '../utils/parser-helpers';
 
 export class AIService {
@@ -48,12 +49,16 @@ Body:
 ${contentBody}
 `;
 
-            const response = await this.client.messages.create({
-                model: config.detailedAI.model || 'claude-haiku-4-5-20251001',
-                max_tokens: 1024,
-                system: this.systemPrompt,
-                messages: [{ role: 'user', content: content }],
-            });
+            const response = await withRetry(
+                () => this.client.messages.create({
+                    model: config.detailedAI.model || 'claude-haiku-4-5-20251001',
+                    max_tokens: 1024,
+                    system: this.systemPrompt,
+                    messages: [{ role: 'user', content: content }],
+                }),
+                { retries: 3, backoff: 1000, factor: 2 },
+                'claude-parse'
+            );
 
             // Type guard for the content block
             const textContent = response.content[0];
