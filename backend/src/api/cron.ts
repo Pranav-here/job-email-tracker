@@ -29,18 +29,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (emails.length === 0) {
             logger.info('No job-related emails found.');
-            return res.status(200).json({
-                success: true,
-                message: 'No relevant emails found',
-                processed: 0
-            });
         }
 
         const stats = {
             processed: 0,
             synced: 0,
             errors: 0,
-            duplicates: 0
+            duplicates: 0,
+            ghosted: 0,
         };
 
         // 2. Process each email
@@ -108,7 +104,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             await new Promise(resolve => setTimeout(resolve, 700));
         }
 
-        // 5. Finalize
+        // 5. Ghost sweep: mark all stale Applied/Interviewing records as Ghosted
+        logger.info('Running ghost sweep on all active records...');
+        try {
+            const activeRecords = await airtableService.getActiveRecords();
+            for (const record of activeRecords) {
+                if (shouldMarkGhosted(record, undefined, config.app.ghostingDays)) {
+                    const company = (record.get('Company') as string) || 'Unknown';
+                    const role = (record.get('Role') as string) || 'Unknown';
+                    logger.info(`Ghost sweep: marking ${company} - ${role} as Ghosted`);
+                    await airtableService.markAsGhosted(record);
+                    stats.ghosted++;
+                    metrics.incrementAirtableSynced();
+                    metrics.incrementAirtableUpdated();
+                    await new Promise(resolve => setTimeout(resolve, 700));
+                }
+            }
+            logger.info(`Ghost sweep complete: ${stats.ghosted} records ghosted`);
+        } catch (err) {
+            logger.error('Ghost sweep failed', { error: err });
+            metrics.recordError('ghost_sweep', err instanceof Error ? err.message : 'Unknown error');
+        }
+
+        // 6. Finalize
         metrics.finalize();
         const report = metrics.getReport();
 
