@@ -4,7 +4,7 @@
  */
 export function shouldMarkGhosted(
     record: { get: (field: string) => any },
-    fallbackEmailDate: Date,
+    fallbackEmailDate: Date | undefined,
     thresholdDays: number = 45
 ): boolean {
     const dates: Date[] = [];
