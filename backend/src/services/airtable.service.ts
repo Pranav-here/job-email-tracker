@@ -238,6 +238,43 @@ export class AirtableService {
         );
     }
 
+    async markMultipleAsGhosted(records: Airtable.Record<any>[]): Promise<void> {
+        if (records.length === 0) return;
+        const today = this.formatDate(new Date());
+        const BATCH_SIZE = 10;
+
+        for (let i = 0; i < records.length; i += BATCH_SIZE) {
+            const batch = records.slice(i, i + BATCH_SIZE);
+            const updates = batch.map(record => {
+                const historyEntry = `${today} - ${ApplicationStatus.GHOSTED} | Auto-ghosted (no activity)`;
+                const priorHistory = (record.get('Status History') as string) || '';
+                const statusHistory = priorHistory ? `${priorHistory}\n${historyEntry}` : historyEntry;
+                return {
+                    id: record.id,
+                    fields: {
+                        'Status': ApplicationStatus.GHOSTED,
+                        'Last Status Change Date': today,
+                        'Last Event Type': 'status_update',
+                        'Last Updated': today,
+                        'Status History': statusHistory,
+                        'Timeline Text': statusHistory,
+                    } as any,
+                };
+            });
+
+            await withRetry(
+                () => this.table.update(updates),
+                { retries: 3, backoff: 2000, factor: 2 },
+                'airtable.markMultipleAsGhosted'
+            );
+
+            // ~4 batches/sec, well under Airtable's 5 req/sec limit
+            if (i + BATCH_SIZE < records.length) {
+                await new Promise(resolve => setTimeout(resolve, 250));
+            }
+        }
+    }
+
     async findRecordByThreadId(threadId: string): Promise<Airtable.Record<any> | null> {
         const result = await withRetry(
             () => this.table
