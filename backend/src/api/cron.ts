@@ -108,18 +108,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         logger.info('Running ghost sweep on all active records...');
         try {
             const activeRecords = await airtableService.getActiveRecords();
-            for (const record of activeRecords) {
-                if (shouldMarkGhosted(record, undefined, config.app.ghostingDays)) {
-                    const company = (record.get('Company') as string) || 'Unknown';
-                    const role = (record.get('Role') as string) || 'Unknown';
-                    logger.info(`Ghost sweep: marking ${company} - ${role} as Ghosted`);
-                    await airtableService.markAsGhosted(record);
-                    stats.ghosted++;
-                    metrics.incrementAirtableSynced();
-                    metrics.incrementAirtableUpdated();
-                    await new Promise(resolve => setTimeout(resolve, 700));
-                }
+            const toGhost = activeRecords.filter(record =>
+                shouldMarkGhosted(record, undefined, config.app.ghostingDays)
+            );
+
+            for (const record of toGhost) {
+                const company = (record.get('Company') as string) || 'Unknown';
+                const role = (record.get('Role') as string) || 'Unknown';
+                logger.info(`Ghost sweep: marking ${company} - ${role} as Ghosted`);
             }
+
+            await airtableService.markMultipleAsGhosted(toGhost);
+            stats.ghosted = toGhost.length;
+            for (let i = 0; i < toGhost.length; i++) {
+                metrics.incrementAirtableSynced();
+                metrics.incrementAirtableUpdated();
+            }
+
             logger.info(`Ghost sweep complete: ${stats.ghosted} records ghosted`);
         } catch (err) {
             logger.error('Ghost sweep failed', { error: err });
