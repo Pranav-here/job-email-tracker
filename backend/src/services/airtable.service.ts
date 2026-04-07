@@ -199,6 +199,45 @@ export class AirtableService {
         }
     }
 
+    async getActiveRecords(): Promise<Airtable.Record<any>[]> {
+        return new Promise((resolve, reject) => {
+            const records: Airtable.Record<any>[] = [];
+            this.table
+                .select({
+                    filterByFormula: `OR({Status} = "${ApplicationStatus.APPLIED}", {Status} = "${ApplicationStatus.INTERVIEWING}")`,
+                })
+                .eachPage(
+                    (page, fetchNextPage) => {
+                        records.push(...page);
+                        fetchNextPage();
+                    },
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve(records);
+                    }
+                );
+        });
+    }
+
+    async markAsGhosted(record: Airtable.Record<any>): Promise<void> {
+        const today = this.formatDate(new Date());
+        const historyEntry = `${today} - ${ApplicationStatus.GHOSTED} | Auto-ghosted (no activity)`;
+        const priorHistory = (record.get('Status History') as string) || '';
+        const updates: any = {
+            'Status': ApplicationStatus.GHOSTED,
+            'Last Status Change Date': today,
+            'Last Event Type': 'status_update',
+            'Last Updated': today,
+            'Status History': priorHistory ? `${priorHistory}\n${historyEntry}` : historyEntry,
+        };
+        updates['Timeline Text'] = updates['Status History'];
+        await withRetry(
+            () => this.table.update(record.id, updates),
+            { retries: 3, backoff: 2000, factor: 2 },
+            'airtable.markAsGhosted'
+        );
+    }
+
     async findRecordByThreadId(threadId: string): Promise<Airtable.Record<any> | null> {
         const result = await withRetry(
             () => this.table
