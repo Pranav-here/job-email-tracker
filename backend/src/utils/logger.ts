@@ -12,12 +12,26 @@ class Logger {
         return levels.indexOf(level) >= levels.indexOf(this.level);
     }
 
+    private serializeMeta(value: any): any {
+        if (value instanceof Error) {
+            return { message: value.message, name: value.name, stack: value.stack };
+        }
+        if (value !== null && typeof value === 'object') {
+            const out: any = {};
+            for (const k of Object.keys(value)) {
+                out[k] = this.serializeMeta(value[k]);
+            }
+            return out;
+        }
+        return value;
+    }
+
     private formatMessage(level: LogLevel, message: string, meta?: any) {
         return JSON.stringify({
             timestamp: new Date().toISOString(),
             level,
             message,
-            ...(meta && { meta }),
+            ...(meta !== undefined && { meta: this.serializeMeta(meta) }),
         });
     }
 
